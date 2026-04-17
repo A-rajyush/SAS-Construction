@@ -1,15 +1,24 @@
 const tiltNodes = document.querySelectorAll("[data-tilt]");
 const depthScopes = document.querySelectorAll("[data-depth-scope]");
 const revealNodes = document.querySelectorAll(".reveal");
+const heroVisual = document.querySelector(".hero-visual");
+const heroCopy = document.querySelector(".hero-copy");
+const commandChips = document.querySelectorAll(".command-chip");
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 const transformCache = new WeakMap();
+const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-tiltNodes.forEach((node) => {
+const setTransformCache = (node) => {
   const baseTransform = getComputedStyle(node).transform;
   transformCache.set(node, baseTransform === "none" ? "" : baseTransform);
+};
+
+tiltNodes.forEach((node) => {
+  setTransformCache(node);
 
   const handleMove = (event) => {
+    if (prefersReducedMotion) return;
     const rect = node.getBoundingClientRect();
     const px = (event.clientX - rect.left) / rect.width;
     const py = (event.clientY - rect.top) / rect.height;
@@ -31,13 +40,10 @@ tiltNodes.forEach((node) => {
 
 depthScopes.forEach((scope) => {
   const depthNodes = scope.querySelectorAll("[data-depth]");
-
-  depthNodes.forEach((node) => {
-    const baseTransform = getComputedStyle(node).transform;
-    transformCache.set(node, baseTransform === "none" ? "" : baseTransform);
-  });
+  depthNodes.forEach(setTransformCache);
 
   const updateDepth = (event) => {
+    if (prefersReducedMotion) return;
     const rect = scope.getBoundingClientRect();
     const px = clamp((event.clientX - rect.left) / rect.width, 0, 1) - 0.5;
     const py = clamp((event.clientY - rect.top) / rect.height, 0, 1) - 0.5;
@@ -77,6 +83,39 @@ const revealObserver = new IntersectionObserver(
   }
 );
 
-revealNodes.forEach((node) => {
-  revealObserver.observe(node);
-});
+revealNodes.forEach((node) => revealObserver.observe(node));
+
+if (!prefersReducedMotion && heroVisual && heroCopy) {
+  let ticking = false;
+
+  const updateScrollEffects = () => {
+    const offset = window.scrollY;
+    const viewport = window.innerHeight || 800;
+    const progress = clamp(offset / (viewport * 1.1), 0, 1);
+    const move = progress * 54;
+    const scale = 1 + progress * 0.03;
+    const rotation = progress * 7;
+
+    heroVisual.style.transform = `translateY(${move}px) scale(${scale}) rotateX(${rotation}deg)`;
+    heroCopy.style.transform = `translateY(${move * 0.35}px)`;
+
+    commandChips.forEach((chip, index) => {
+      const direction = index % 2 === 0 ? 1 : -1;
+      chip.style.transform = `translate3d(0, ${move * 0.28 * direction}px, 0)`;
+    });
+  };
+
+  const onScroll = () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      updateScrollEffects();
+      ticking = false;
+    });
+  };
+
+  window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("resize", updateScrollEffects);
+  updateScrollEffects();
+}
+
